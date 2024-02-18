@@ -1,3 +1,5 @@
+![auto_patch release](https://img.shields.io/badge/release-version1.0-blue)
+
 # AUTO PATCH
 
 ```
