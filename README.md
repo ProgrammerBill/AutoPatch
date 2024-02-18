@@ -23,5 +23,5 @@ This project is designed to facilitate the rapid selection of repositories and c
 run auto_patch.py and generate patch files in auto_create_patch.
 
 ```
-python3 auto_patch.py
+python3 auto_patch.py -i [sdk path] -o [patch path]
 ```

@@ -22,6 +22,7 @@ from datetime import datetime
 import time
 import shutil
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import argparse
 
 class bcolors:
     HEADER = '\033[95m'
@@ -44,15 +45,13 @@ str_auto_patch = '''
 ╚═╝  ╚═╝ ╚═════╝    ╚═╝    ╚═════╝     ╚═╝     ╚═╝  ╚═╝   ╚═╝    ╚═════╝╚═╝  ╚═╝
 '''
 
-def find_git_repos(root_dir):
-    git_dirs = []
-    for dirpath, dirnames, filenames in os.walk(root_dir):
-        if '.repo' in dirpath:
-            continue
-        if '.git' in dirnames:
-            git_dirs.append(dirpath)
-            dirnames.remove('.git')
-    return git_dirs
+def find_git_repos_with_find(root_dir):
+    if '.repo' in root_dir:
+        return []
+    cmd = ["find", root_dir, "-type", "d", "-name", ".git"]
+    result = subprocess.run(cmd, stdout=subprocess.PIPE, text=True)
+    paths = [line[:-5] for line in result.stdout.split('\n') if line]
+    return paths
 
 def save_to_config(config_file, git_dirs):
     config = configparser.ConfigParser()
@@ -70,7 +69,7 @@ def read_config(config_file):
     config = configparser.ConfigParser()
     config.read(config_file)
 
-    print('Available sections:', config.sections())
+    #print('Available sections:', config.sections())
     git_list=''
     if 'Git Repositories' in config:
         for repo in config['Git Repositories']:
@@ -169,8 +168,19 @@ def main():
     print(bcolors.HEADER + str_auto_patch + bcolors.ENDC)
 
     # 2. parse and save config file for the first time.
-    #todo: select from args
     root_dir = './android'
+    # 创建 ArgumentParser 对象
+    parser = argparse.ArgumentParser(description='处理输入和输出的示例程序。')
+    # 添加 -i 选项作为输入文件
+    parser.add_argument('-i', '--input', required=True, help='输入文件的路径')
+    # 添加 -o 选项作为输出文件
+    parser.add_argument('-o', '--output', required=True, help='输出文件的路径')
+
+    # 解析命令行参数
+    args = parser.parse_args()
+    if args.input:
+        root_dir = args.input
+
     config_file = '.git_repos.ini'
 
     if os.path.exists(config_file):
@@ -181,7 +191,7 @@ def main():
         start_time = time.time()  # 记录开始时间
         with ThreadPoolExecutor() as executor:
             # 提交目录遍历任务
-            futures = [executor.submit(find_git_repos, os.path.join(root_dir, name)) for name in os.listdir(root_dir)]
+            futures = [executor.submit(find_git_repos_with_find, os.path.join(root_dir, name)) for name in os.listdir(root_dir)]
         # 收集结果
         git_dirs = []
         for future in as_completed(futures):
@@ -206,10 +216,10 @@ def main():
         # 4. show git respository
         fzf_command = ['fzf', '--ansi', '--prompt', '1. plz choose the git repository you want to patch> ', '--height', '40%']
         process = subprocess.Popen(fzf_command, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-        stdout, stderr = process.communicate(input=sdk_infos.encode('utf-8'))
+        stdout, _ = process.communicate(input=sdk_infos.encode('utf-8'))
         git_dir_name = stdout.decode('utf-8').strip()
         if git_dir_name:
-            print(bcolors.OKCYAN + 'patch location: ' + git_dir_name + bcolors.ENDC)
+            print(bcolors.OKBLUE + 'patch location: ' + git_dir_name + bcolors.ENDC)
         else:
             print("No selection made.")
             sys.exit(0)
@@ -217,11 +227,11 @@ def main():
         fzf_command[3] = '2. please chose the diff type> '
         process = subprocess.Popen(fzf_command, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
         patch_infos = " 1. diff\n 2. cache\n 3. history\n"
-        stdout, stderr = process.communicate(input=patch_infos.encode('utf-8'))
+        stdout, _ = process.communicate(input=patch_infos.encode('utf-8'))
         patch_type = stdout.decode('utf-8').strip()
         patch_type = re.sub(r'^\d+\.\s+', '', patch_type)
         if patch_type:
-            print(bcolors.OKCYAN + 'type: ' + patch_type + bcolors.ENDC)
+            print(bcolors.OKBLUE + 'patch type: ' + patch_type + bcolors.ENDC)
         else:
             print("No selection made.")
             sys.exit(0)
@@ -238,7 +248,7 @@ def main():
         fzf_command[3] = '3. continue to patch?> '
         process = subprocess.Popen(fzf_command, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
         select_infos = " 1. yes\n 2. no\n"
-        stdout, stderr = process.communicate(input=select_infos.encode('utf-8'))
+        stdout, _ = process.communicate(input=select_infos.encode('utf-8'))
         ans = stdout.decode('utf-8').strip()
         ans = re.sub(r'^\d+\.\s+', '', ans)
         if ans == 'no':
@@ -247,7 +257,7 @@ def main():
     save_repos_info_to_json(repos_info, '.repos_info.json')
     with open('.repos_info.json') as f:
         repos_info = json.load(f)
-    target_path = './auto_create_patch'
+    target_path = args.output + '/auto_create_patch'
     now = datetime.now()
     formatted_date = now.strftime('%Y-%m-%d')
 
@@ -260,6 +270,7 @@ def main():
 
     for repo_info in repos_info:
         generate_patches_and_copy_sources(repo_info, target_patch_dir, patch_filename)
+    print(bcolors.OKGREEN + "auto_patch finished, plz check " + target_patch_dir + bcolors.ENDC)
 
 if __name__ == '__main__':
     main()
