@@ -19,7 +19,9 @@ import os
 import configparser
 
 from datetime import datetime
+import time
 import shutil
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 class bcolors:
     HEADER = '\033[95m'
@@ -33,7 +35,7 @@ class bcolors:
     UNDERLINE = '\033[4m'
 
 welcome_str="Thanks to use"
-str = '''
+str_auto_patch = '''
  █████╗ ██╗   ██╗████████╗ ██████╗     ██████╗  █████╗ ████████╗ ██████╗██╗  ██╗
 ██╔══██╗██║   ██║╚══██╔══╝██╔═══██╗    ██╔══██╗██╔══██╗╚══██╔══╝██╔════╝██║  ██║
 ███████║██║   ██║   ██║   ██║   ██║    ██████╔╝███████║   ██║   ██║     ███████║
@@ -50,14 +52,16 @@ def find_git_repos(root_dir):
         if '.git' in dirnames:
             git_dirs.append(dirpath)
             dirnames.remove('.git')
-    sorted_paths = sorted(git_dirs)
-    return sorted_paths
+    return git_dirs
 
 def save_to_config(config_file, git_dirs):
     config = configparser.ConfigParser()
     config['Git Repositories'] = {}
-    for i, path in enumerate(git_dirs, start=1):
-        config['Git Repositories'][f'{i}'] = path
+    i = 1
+    for path_list in git_dirs:  # git_dirs现在是包含路径列表的列表
+       for path in path_list:  # 遍历每个子列表中的路径
+           config['Git Repositories'][f'{i}'] = str(path)  # 确保是字符串
+           i += 1
 
     with open(config_file, 'w') as configfile:
         config.write(configfile)
@@ -162,7 +166,7 @@ def main():
     # 1. show logo.
     os.system("clear")
     print(welcome_str)
-    print(bcolors.HEADER + str + bcolors.ENDC)
+    print(bcolors.HEADER + str_auto_patch + bcolors.ENDC)
 
     # 2. parse and save config file for the first time.
     #todo: select from args
@@ -173,9 +177,22 @@ def main():
         print(f"{config_file} exits, skip searching .git dirs。")
     else:
         print("wait for first searching git respository...")
-        git_dirs = find_git_repos(root_dir)
+        # 使用线程池
+        start_time = time.time()  # 记录开始时间
+        with ThreadPoolExecutor() as executor:
+            # 提交目录遍历任务
+            futures = [executor.submit(find_git_repos, os.path.join(root_dir, name)) for name in os.listdir(root_dir)]
+        # 收集结果
+        git_dirs = []
+        for future in as_completed(futures):
+            result = future.result()
+            if result:
+                git_dirs.append(result)
+        git_dirs = sorted(git_dirs);
         save_to_config(config_file, git_dirs)
-        print(f"infos for all .git directroies in {root_dir} has saved to {config_file}。")
+        print(f"infos for all .git directroies in {root_dir} has saved to {config_file}.")
+        end_time = time.time()  # 记录结束时间
+        print(f"Execution time: {end_time - start_time} seconds")  # 计算并打印执行时间
 
     # 3. read config_file.
     sdk_infos=read_config(config_file)
