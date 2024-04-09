@@ -57,6 +57,26 @@ def find_git_repos_with_find(root_dir):
     return paths
 
 
+def find_git_repos_with_repo_list(root_dir):
+    # Ensure we're in the root directory of the repo
+    print(f"searching {root_dir}")
+    original_cwd = os.getcwd()
+    os.chdir(root_dir)
+
+    # Execute 'repo list -p' to get the paths of all repos
+    cmd = ["repo", "list", "-p"]
+    result = subprocess.run(cmd, stdout=subprocess.PIPE, text=True)
+
+    # The output will be a list of repo paths, one per line
+    paths = result.stdout.split("\n")
+
+    # Filter out empty lines
+    paths = [path for path in paths if path]
+
+    os.chdir(original_cwd)
+    return paths
+
+
 def save_to_config(config_file, git_dirs):
     config = configparser.ConfigParser()
     config["Git Repositories"] = {}
@@ -239,10 +259,7 @@ def main():
         start_time = time.time()  # 记录开始时间
         with ThreadPoolExecutor() as executor:
             # 提交目录遍历任务
-            futures = [
-                executor.submit(find_git_repos_with_find, os.path.join(root_dir, name))
-                for name in os.listdir(root_dir)
-            ]
+            futures = [executor.submit(find_git_repos_with_repo_list, root_dir)]
         # 收集结果
         git_dirs = []
         for future in as_completed(futures):
@@ -325,7 +342,9 @@ def main():
     formatted_date = now.strftime("%Y-%m-%d")
 
     patch_dir = f"{patch_subject.replace(' ', '_')}"
-    print(f"target_path: {target_path} formatted_date: {formatted_date} patch_dir: {patch_dir}")
+    print(
+        f"target_path: {target_path} formatted_date: {formatted_date} patch_dir: {patch_dir}"
+    )
     target_patch_dir = os.path.join(target_path.strip("./"), formatted_date, patch_dir)
     patch_filename = patch_dir.upper() + ".diff"
     print(f"target_patch_dir: {target_patch_dir} patch_filename: {patch_filename}")
