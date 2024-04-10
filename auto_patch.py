@@ -110,7 +110,9 @@ def select_commits_with_fzf(repo_path):
         os.chdir(repo_path)
 
         git_log_command = ["git", "log", "--oneline"]
-        git_log_output = subprocess.check_output(git_log_command).decode("utf-8")
+        git_log_output = subprocess.check_output(git_log_command).decode(
+            "utf-8", errors="ignore"
+        )
 
         fzf_command = [
             "fzf",
@@ -156,8 +158,8 @@ def save_repos_info_to_json(repos_info, filename):
         json.dump(repos_info, file, indent=4)
 
 
-def generate_patches_and_copy_sources(repo_info, target_path, patch_filename):
-    repo_path = repo_info["name"]
+def generate_patches_and_copy_sources(root_dir, repo_info, target_path, patch_filename):
+    repo_path = os.path.join(root_dir, repo_info["name"])
     repo_type = repo_info["type"]
 
     original_cwd = os.getcwd()
@@ -318,7 +320,8 @@ def main():
             sys.exit(0)
         git_info = {"name": git_dir_name, "type": patch_type}
         if patch_type == "history":
-            start_commit, end_commit = select_commits_with_fzf(git_dir_name)
+            git_dir_real_path = os.path.join(root_dir, git_dir_name)
+            start_commit, end_commit = select_commits_with_fzf(git_dir_real_path)
             git_info["start_commit"] = start_commit
             git_info["end_commit"] = end_commit
         repos_info.append(git_info)
@@ -354,7 +357,9 @@ def main():
     os.makedirs(os.path.dirname(target_patch_dir), exist_ok=True)
 
     for repo_info in repos_info:
-        generate_patches_and_copy_sources(repo_info, target_patch_dir, patch_filename)
+        generate_patches_and_copy_sources(
+            root_dir, repo_info, target_patch_dir, patch_filename
+        )
     print(
         bcolors.OKGREEN
         + "auto_patch finished, plz check "
