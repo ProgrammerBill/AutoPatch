@@ -127,7 +127,7 @@ def select_commits_with_fzf(repo_path):
         start_commit, _ = start_commit_process.communicate(
             input=git_log_output.encode("utf-8")
         )
-        start_commit_hash = start_commit.decode("utf-8").split()[0]
+        start_commit_hash = start_commit.decode("utf-8").split()[0] + "^"
 
         if start_commit_hash:
             git_log_command = ["git", "log", f"{start_commit_hash}..HEAD", "--oneline"]
